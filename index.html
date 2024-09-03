@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wind Simulator Control</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            margin: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        button:active {
+            background-color: #004494;
+        }
+
+        .sensor-data {
+            margin-top: 20px;
+            font-size: 18px;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <h1>Wind Simulator Control</h1>
+    <button id="connectButton">Connect to Device</button>
+    <button id="toggleButton">Toggle MSS</button>
+
+    <div class="sensor-data" id="sensorData">
+        <p>Current: <span id="current">N/A</span> A</p>
+        <p>PT1 ADC: <span id="pt1adc">N/A</span></p>
+        <p>PT2 ADC: <span id="pt2adc">N/A</span></p>
+        <p>Tach Speed: <span id="tachspeed">N/A</span></p>
+        <p>Temperature: <span id="temperature">N/A</span> °C</p>
+        <p>Humidity: <span id="humidity">N/A</span> %</p>
+    </div>
+
+    <script>
+        const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+        const TOGGLE_MSS_CHARACTERISTIC_UUID = "d4c3d8a6-3c4a-11ec-8d3d-0242ac130004";
+        const SENSOR_DATA_CHARACTERISTIC_UUID = "d4c3d8a6-3c4a-11ec-8d3d-0242ac130005";
+
+        let toggleCharacteristic;
+        let sensorDataCharacteristic;
+
+        async function connectToDevice() {
+            try {
+                console.log('Requesting Bluetooth Device...');
+                const device = await navigator.bluetooth.requestDevice({
+                    filters: [{ services: [SERVICE_UUID] }]
+                });
+
+                console.log('Connecting to GATT Server...');
+                const server = await device.gatt.connect();
+
+                console.log('Getting Service...');
+                const service = await server.getPrimaryService(SERVICE_UUID);
+
+                console.log('Getting Characteristics...');
+                toggleCharacteristic = await service.getCharacteristic(TOGGLE_MSS_CHARACTERISTIC_UUID);
+                sensorDataCharacteristic = await service.getCharacteristic(SENSOR_DATA_CHARACTERISTIC_UUID);
+
+                console.log('Connected to device');
+
+                // Start notifications for sensor data
+                sensorDataCharacteristic.startNotifications();
+                sensorDataCharacteristic.addEventListener('characteristicvaluechanged', handleSensorData);
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        async function toggleMSS() {
+            if (!toggleCharacteristic) {
+                console.error('Not connected to device');
+                return;
+            }
+
+            try {
+                console.log('Toggling MSS...');
+                const value = new Uint8Array([1]); // Value to write (can be anything)
+                await toggleCharacteristic.writeValue(value);
+                console.log('MSS toggled');
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        function handleSensorData(event) {
+            const value = new TextDecoder().decode(event.target.value);
+            const [current, pt1adc, pt2adc, tachspeed, temperature, humidity] = value.split(',');
+
+            document.getElementById('current').textContent = current;
+            document.getElementById('pt1adc').textContent = pt1adc;
+            document.getElementById('pt2adc').textContent = pt2adc;
+            document.getElementById('tachspeed').textContent = tachspeed;
+            document.getElementById('temperature').textContent = temperature;
+            document.getElementById('humidity').textContent = humidity;
+        }
+
+        document.getElementById('connectButton').addEventListener('click', connectToDevice);
+        document.getElementById('toggleButton').addEventListener('click', toggleMSS);
+    </script>
+</body>
+</html>
